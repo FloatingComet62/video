@@ -22,7 +22,8 @@ def figure_out_resolution(num_of_equations):
 class EquationRenderer:
     is_pre_renderer = False
     padding = 20
-    title_preserve = 80
+    header_preserve = 80
+    footer_preserve = 20
 
     def __init__(self, window, equations):
         global renderer_already_created
@@ -32,7 +33,7 @@ class EquationRenderer:
             raise CometException("EquationRenderer will cause name conflicts")
         renderer_already_created = True
 
-        self.batch = graphics.Batch()
+        self.batches = []
         self.sprites = []
         self.window = window
         images = []
@@ -60,35 +61,54 @@ class EquationRenderer:
             total_height += image.height
         total_height += self.padding * (len(images) - 1)
         start_height = window.height // 2 + total_height // 2
-        current_height = min(start_height, window.height - self.title_preserve)
+        current_height = min(start_height, window.height - self.header_preserve)
 
         for image in images:
+            batch = graphics.Batch()
+            batch.actually_render = True
             self.sprites.append(sprite.Sprite(
                 image,
                 window.width // 2 - image.width // 2,
                 current_height - image.height,
-                batch=self.batch
+                batch=batch
             ))
             current_height -= image.height + self.padding
 
-    def draw(self):
-        self.batch.draw()
+            self.batches.append(batch)
 
-    def pop_first_eqn(self):
+    def update_sprites(self, right_shift=0, top_shift=0):
+        total_height = 0
+        break_index = -1
+        for i, s in enumerate(self.sprites):
+            total_height += s.height
+            if total_height + self.padding * i + self.header_preserve <= self.window.height - self.footer_preserve:
+                continue
+            break_index = i
+            break
+        total_height += self.padding * (len(self.sprites) - 1)
+        start_height = self.window.height // 2 + total_height // 2
+        current_height = min(start_height, self.window.height - self.header_preserve)
+
+        for i, s in enumerate(self.sprites):
+            if break_index != -1 and break_index <= i:
+                self.batches[i].actually_render = False
+                continue
+            s.update(
+                self.window.width // 2 - s.width // 2 + right_shift,
+                current_height - s.height + top_shift,
+            )
+            self.batches[i].actually_render = True
+            current_height -= s.height + self.padding
+
+    def draw(self):
+        self.update_sprites()
+        for batch in self.batches:
+            if batch.actually_render:
+                batch.draw()
+
+    def pop_first_eqn(self, right_shift=0, top_shift=0):
         if len(self.sprites) == 0:
             return
         self.sprites = self.sprites[1:]
-
-        total_height = 0
-        for s in self.sprites:
-            total_height += s.height
-        total_height += self.padding * (len(self.sprites) - 1)
-        start_height = self.window.height // 2 + total_height // 2
-        current_height = min(start_height, self.window.height - self.title_preserve)
-
-        for s in self.sprites:
-            s.update(
-                self.window.width // 2 - s.width // 2,
-                current_height - s.height,
-            )
-            current_height -= s.height + self.padding
+        self.batches = self.batches[1:]
+        self.update_sprites(right_shift, top_shift)
